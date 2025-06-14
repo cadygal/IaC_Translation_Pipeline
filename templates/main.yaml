@@ -41,3 +41,42 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: "*"
+                
+Parameters:
+  LambdaZipS3Bucket:
+    Type: String
+    Description: S3 bucket where Lambda deployment package is stored
+
+  LambdaZipS3Key:
+    Type: String
+    Description: S3 key (path) to the Lambda deployment package zip file
+
+Resources:
+  TranslateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-translate-fn'
+      Handler: translator.lambda_handler
+      Role: !GetAtt TranslateLambdaExecutionRole.Arn
+      Runtime: python3.9
+      Code:
+        S3Bucket: !Ref LambdaZipS3Bucket
+        S3Key: !Ref LambdaZipS3Key
+      Timeout: 30
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TranslateFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt RequestBucket.Arn
+
+  RequestBucketNotification:
+    Type: AWS::S3::BucketNotification
+    Properties:
+      Bucket: !Ref RequestBucket
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt TranslateFunction.Arn
