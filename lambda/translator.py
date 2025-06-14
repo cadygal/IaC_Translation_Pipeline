@@ -1,41 +1,51 @@
-import json
 import boto3
+import os
 
 s3 = boto3.client('s3')
 translate = boto3.client('translate')
 
+# Optional: Set default output bucket, can be overridden with environment variable
+DEFAULT_OUTPUT_BUCKET = 'translate-capstone-response'
+
 def lambda_handler(event, context):
-    print("EVENT RECEIVED:", json.dumps(event))
+    print("Received event:", event)
 
     try:
-        input_bucket = event['Records'][0]['s3']['bucket']['name']
-        key = event['Records'][0]['s3']['object']['key']
+        # Extract bucket name and object key from S3 event
+        record = event['Records'][0]
+        input_bucket = record['s3']['bucket']['name']
+        key = record['s3']['object']['key']
 
-        print(f"Bucket: {input_bucket}")
-        print(f"Key: {key}")
+        print(f"Input Bucket: {input_bucket}, Key: {key}")
 
+        # Download original file
         response = s3.get_object(Bucket=input_bucket, Key=key)
-        text = response['Body'].read().decode('utf-8')
-        
-        result = translate.translate_text(
-            Text=text,
+        file_content = response['Body'].read().decode('utf-8')
+
+        # Translate text
+        translation_result = translate.translate_text(
+            Text=file_content,
             SourceLanguageCode='en',
             TargetLanguageCode='fr'
         )
+        translated_text = translation_result['TranslatedText']
 
-        output_key = key.replace(".json", "-fr.json")
+        print("Translation complete")
 
-        s3.put_object(
-            Bucket=input_bucket.replace("request", "response"),
-            Key=output_key,
-            Body=result['TranslatedText']
-        )
+        # Determine output bucket (env variable or default)
+        output_bucket = os.environ.get('OUTPUT_BUCKET', DEFAULT_OUTPUT_BUCKET)
+        output_key = f"translated/{key}"
+
+        # Upload translated result to output bucket
+        s3.put_object(Bucket=output_bucket, Key=output_key, Body=translated_text.encode('utf-8'))
+
+        print(f"Uploaded to {output_bucket}/{output_key}")
 
         return {
             'statusCode': 200,
-            'body': 'Translation successful'
+            'body': f"Translation uploaded to {output_bucket}/{output_key}"
         }
 
     except Exception as e:
-        print(f"ERROR: {str(e)}")
+        print("Error:", str(e))
         raise
