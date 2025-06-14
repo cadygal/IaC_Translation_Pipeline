@@ -1,52 +1,53 @@
-import json
-import boto3
-import os
-
-s3 = boto3.client('s3')
-translate = boto3.client('translate')
+import json, os, boto3, traceback
+s3 = boto3.client("s3")
+translate = boto3.client("translate")
 
 def lambda_handler(event, context):
+    # 🔎 1. Log the raw event so we always know what we got
     print("Event Received:")
-    print(json.dumps(event))
+    print(json.dumps(event, indent=2))
 
     try:
-        input_bucket = event['Records'][0]['s3']['bucket']['name']
-        key = event['Records'][0]['s3']['object']['key']
+        # 💡 2. Extract bucket/key from REAL S3 event
+        records = event.get("Records", [])
+        if not records:
+            raise ValueError("No S3 records in event")
 
-        response = s3.get_object(Bucket=input_bucket, Key=key)
-        file_content = response['Body'].read().decode('utf-8')
-        data = json.loads(file_content)
+        input_bucket = records[0]["s3"]["bucket"]["name"]
+        key          = records[0]["s3"]["object"]["key"]
 
-        source = data['source_lang']
-        target = data['target_lang']
-        text = data['text']
+        # 🗄️ 3. Download the file
+        obj = s3.get_object(Bucket=input_bucket, Key=key)
+        data = json.loads(obj["Body"].read())
 
-        translated = translate.translate_text(
-            Text=text,
-            SourceLanguageCode=source,
-            TargetLanguageCode=target
-        )
+        src  = data["source_lang"]
+        dst  = data["target_lang"]
+        text = data["text"]
 
-        output = {
-            "translated_text": translated['TranslatedText'],
-            "source_lang": source,
-            "target_lang": target
+        # 🌐 4. Translate
+        out  = translate.translate_text(Text=text,
+                                        SourceLanguageCode=src,
+                                        TargetLanguageCode=dst)
+
+        result = {
+            "original_text": text,
+            "translated_text": out["TranslatedText"],
+            "source_lang": src,
+            "target_lang": dst
         }
 
-        output_key = key.replace('.json', '_translated.json')
-        output_bucket = os.environ['RESPONSE_BUCKET']
+        # 📨 5. Write to response bucket
+        out_bucket = os.environ["RESPONSE_BUCKET"]
+        out_key    = key.replace(".json", "_translated.json")
 
-        s3.put_object(
-            Bucket=output_bucket,
-            Key=output_key,
-            Body=json.dumps(output)
-        )
+        s3.put_object(Bucket=out_bucket,
+                      Key=out_key,
+                      Body=json.dumps(result, indent=2).encode())
 
-        return {
-            'statusCode': 200,
-            'body': f'Translated file saved as {output_key} in {output_bucket}'
-        }
+        return {"statusCode": 200,
+                "body": f"Saved {out_bucket}/{out_key}"}
 
     except Exception as e:
-        print(f"Error occurred: {str(e)}")
+        print("ERROR:", str(e))
+        traceback.print_exc()
         raise
