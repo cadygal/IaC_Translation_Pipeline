@@ -1,3 +1,15 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Capstone Translation Pipeline - S3, Lambda, Translate
+
+Parameters:
+  LambdaZipS3Bucket:
+    Type: String
+    Description: S3 bucket where Lambda deployment package is stored
+
+  LambdaZipS3Key:
+    Type: String
+    Description: S3 key (path) to the Lambda deployment package zip file
+
 Resources:
   RequestBucket:
     Type: AWS::S3::Bucket
@@ -41,17 +53,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: "*"
-                
-Parameters:
-  LambdaZipS3Bucket:
-    Type: String
-    Description: S3 bucket where Lambda deployment package is stored
 
-  LambdaZipS3Key:
-    Type: String
-    Description: S3 key (path) to the Lambda deployment package zip file
-
-Resources:
   TranslateFunction:
     Type: AWS::Lambda::Function
     Properties:
