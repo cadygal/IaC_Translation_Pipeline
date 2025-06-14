@@ -6,36 +6,47 @@ s3 = boto3.client('s3')
 translate = boto3.client('translate')
 
 def lambda_handler(event, context):
-    input_bucket = os.environ.get('INPUT_BUCKET')
-    output_bucket = os.environ.get('OUTPUT_BUCKET')
+    print("Event Received:")
+    print(json.dumps(event))
 
-    # Parse file info from S3 event
-    key = event['Records'][0]['s3']['object']['key']
-    response = s3.get_object(Bucket=input_bucket, Key=key)
-    data = json.loads(response['Body'].read())
+    try:
+        input_bucket = event['Records'][0]['s3']['bucket']['name']
+        key = event['Records'][0]['s3']['object']['key']
 
-    source_lang = data['source_language']
-    target_lang = data['target_language']
-    text = data['text']
+        response = s3.get_object(Bucket=input_bucket, Key=key)
+        file_content = response['Body'].read().decode('utf-8')
+        data = json.loads(file_content)
 
-    translated = translate.translate_text(
-        Text=text,
-        SourceLanguageCode=source_lang,
-        TargetLanguageCode=target_lang
-    )
+        source = data['source_lang']
+        target = data['target_lang']
+        text = data['text']
 
-    result = {
-        'original': text,
-        'translated': translated['TranslatedText'],
-        'source_language': source_lang,
-        'target_language': target_lang
-    }
+        translated = translate.translate_text(
+            Text=text,
+            SourceLanguageCode=source,
+            TargetLanguageCode=target
+        )
 
-    output_key = key.replace(".json", "_translated.json")
-    s3.put_object(
-        Bucket=output_bucket,
-        Key=output_key,
-        Body=json.dumps(result)
-    )
+        output = {
+            "translated_text": translated['TranslatedText'],
+            "source_lang": source,
+            "target_lang": target
+        }
 
-    return {"status": "done", "output_key": output_key}
+        output_key = key.replace('.json', '_translated.json')
+        output_bucket = os.environ['RESPONSE_BUCKET']
+
+        s3.put_object(
+            Bucket=output_bucket,
+            Key=output_key,
+            Body=json.dumps(output)
+        )
+
+        return {
+            'statusCode': 200,
+            'body': f'Translated file saved as {output_key} in {output_bucket}'
+        }
+
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")
+        raise
