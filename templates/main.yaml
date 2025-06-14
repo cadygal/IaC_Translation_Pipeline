@@ -61,13 +61,14 @@ Resources:
       Handler: translator.lambda_handler
       Role: !GetAtt TranslateLambdaExecutionRole.Arn
       Runtime: python3.9
+      Timeout: 30
       Code:
         S3Bucket: !Ref LambdaZipS3Bucket
         S3Key: !Ref LambdaZipS3Key
-      Timeout: 30
       Environment:
-  Variables:
-    RESPONSE_BUCKET: !Ref ResponseBucket
+        Variables:
+          RESPONSE_BUCKET: !Ref ResponseBucket
+
 
 
   LambdaInvokePermission:
